@@ -1,0 +1,843 @@
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <sstream>
+#include <cstdlib>
+#include <ctime>
+#include <conio.h> 
+using namespace std;
+
+class Product {
+public:
+    Product(int id, const string& name, const string& description, double price, int quantity)
+        : id(id), name(name), description(description), price(price), quantity(quantity) {}
+
+    int getId() const { return id; }
+    const string& getName() const { return name; }
+    const string& getDescription() const { return description; }
+    double getPrice() const { return price; }
+    int getQuantity() const { return quantity; }
+    void setQuantity(int newQuantity) { quantity = newQuantity; }
+    void subtractQuantity(int quantityToSubtract) { quantity -= quantityToSubtract; }
+    bool operator==(const Product& other) const {
+        return (name == other.name && price == other.price && description == other.description && quantity == other.quantity);
+    }
+
+private:
+    int id;
+    string name;
+    string description;
+    double price;
+    int quantity;
+};
+
+class User {
+public:
+    User(const string& username) : username(username) {}
+
+    const string& getUsername() const { return username; }
+
+private:
+    string username;
+};
+
+
+///ВСЕ ФУНКЦИИ И МЕТОДЫ
+
+int checkPasswordStrength(string password);
+void registerUser();
+bool checkUniqueLogin(string login);
+bool validatePhoneNumber(string phone);
+void saveUserToFile(string login, string password, string name, string phone);
+
+void loginUser();
+bool checkUserCredentials(string login, string password);
+
+void adminMode();
+bool checkAdminCredentials(string password);
+void viewUsers();
+void addProduct();
+void removeProduct();
+void deleteUser();
+
+// функции для работы с каталогом товаров
+void viewCatalog(const vector<Product>& catalog);
+void sortCatalog();
+void searchProduct();
+
+// функции для покупки товаров
+void buyProducts(const string& username, vector<Product>& catalog, vector<User>& users);
+void showCatalog();
+void removeProducts();
+void saveOrderToFile(string username, vector<string> products);
+
+
+vector<string> splitString(string str, char delimiter) {
+    vector<string> tokens;
+    stringstream ss(str);
+    string token;
+    while (getline(ss, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
+
+vector<string> split(const string& str, char delimiter) {
+    vector<string> tokens;
+    stringstream ss(str);
+    string token;
+    while (getline(ss, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
+
+
+string trimString(string str) {
+    str.erase(remove_if(str.begin(), str.end(), ::isspace), str.end());
+    return str;
+}
+
+int checkPasswordStrength(string password) {
+    // Проверяем длину пароля
+    if (password.length() < 8) {
+        return 0; // Очень слабый
+    }
+    // Проверяем наличие заглавных букв и цифр
+    bool hasUppercase = false, hasLowercase = false, hasDigit = false;
+    for (char c : password) {
+        if (isdigit(c)) {
+            hasDigit = true;
+        }
+        else if (isupper(c)) {
+            hasUppercase = true;
+        }
+        else if (islower(c)) {
+            hasLowercase = true;
+        }
+    }
+    if (!hasDigit || !hasUppercase) {
+        return 1; // Слабый
+    }
+    if (!hasLowercase) {
+        return 2; // Средний
+    }
+    // Проверяем наличие специальных символов
+    bool hasSpecial = false;
+    for (char c : password) {
+        if (!isalnum(c)) {
+            hasSpecial = true;
+            break;
+        }
+    }
+    if (!hasSpecial) {
+        return 3; // Сильный
+    }
+    // Пароль содержит все необходимые символы
+    return 4; // Очень сильный
+}
+
+void loginUser() {
+    system("cls");
+    string login, password;
+    cout << "Введите логин: ";
+    cin >> login;
+    cout << "Введите пароль: ";
+    cin >> password;
+    if (!checkUserCredentials(login, password)) {
+        cout << "\033[1;31mОшибка: Неправильный логин или пароль. Попробуйте еще раз.\033[0m\n";
+        return;
+    }
+    // пользователь прошел авторизацию
+    cout << "Авторизация прошла успешно!" << endl;
+    // здесь можно вызвать другие функции для работы с аккаунтом пользователя
+}
+
+
+bool checkUserCredentials(string login, string password) {
+    // считываем данные о пользователях из файла
+    ifstream usersFile("users.txt");
+    if (!usersFile.is_open()) {
+        cout << "Не удалось открыть файл пользователей." << endl;
+        return false;
+    }
+    string userLogin, userPassword;
+    while (usersFile >> userLogin >> userPassword) {
+        if (userLogin == login && userPassword == password) {
+            // логин и пароль совпали с данными одного из пользователей
+            return true;
+        }
+    }
+    // ни один из пользователей не соответствует введенным данным
+    return false;
+}
+
+// Функция проверки уникальности логина
+bool checkUniqueLogin(string login) {
+    ifstream file("users.txt");
+    string line;
+    while (getline(file, line)) {
+        size_t pos = line.find(login);
+        if (pos != string::npos) {
+            return false; // Логин уже занят
+        }
+    }
+    return true; // Логин свободен
+}
+
+// Функция проверки формата номера телефона
+bool validatePhoneNumber(string phone) {
+    if (phone.length() != 13) {
+        return false; // Неверная длина номера
+    }
+    if (phone.substr(0, 4) != "+375") {
+        return false; // Неверный код страны
+    }
+    for (int i = 4; i < 13; i++) {
+        if (!isdigit(phone[i])) {
+            return false; // Номер должен состоять только из цифр
+        }
+    }
+    return true; // Номер верный
+}
+
+// Функция сохранения пользователя в файл
+void saveUserToFile(string login, string password, string name, string phone) {
+    ofstream file("users.txt", ios_base::app);
+    file << login << " " << password << " " << name << " " << phone << endl;
+    file.close();
+}
+
+// Функция регистрации нового пользователя
+void registerUser() {
+    system("cls");
+    string login, password, name, phone;
+    cout << "Введите логин: ";
+    cin >> login;
+    if (login.length() < 8 || isdigit(login[0])) {
+        cout << "\033[1;31mОшибка: Логин должен быть длиной не менее 8 символов и не начинаться с цифры.\033[0m\n";
+        return;
+    }
+    if (!checkUniqueLogin(login)) {
+        cout << "\033[1;31mОшибка: Пользователь с таким логином уже зарегистрирован.\033[0m\n";
+        return;
+    }
+    cout << "Введите пароль: ";
+    cin >> password;
+    int strength = checkPasswordStrength(password);
+    if (strength == 0) {
+        cout << "\033[1;31mОшибка: Пароль слишком короткий.\033[0m\n";
+        return;
+    }
+    else if (strength == 1) {
+        cout << "\033[1;33mВнимание: Пароль слабый.\033[0m\n";
+    }
+    else if (strength == 2) {
+        cout << "\033[1;32mПароль средней сложности.\033[0m\n";
+    }
+    else if (strength == 3) {
+        cout << "\033[1;36mПароль сильный.\033[0m\n";
+    }
+    else if (strength == 4) {
+        cout << "\033[1;35mПароль очень сильный!\033[0m\n";
+    }
+    cout << "Введите имя: ";
+    cin >> name;
+    cout << "Введите номер телефона (+375XXXXXXXXX): ";
+    cin >> phone;
+    if (!validatePhoneNumber(phone)) {
+        cout << "\033[1;31mОшибка: Неверный формат номера телефона.\033[0m\n";
+        return;
+    }
+    saveUserToFile(login, password, name, phone);
+    cout << "\033[1;32mПользователь успешно зарегистрирован.\033[0m\n";
+}
+
+void createAdmin() {
+    system("cls");
+    ofstream adminFile("admin.txt");
+    if (!adminFile.is_open()) {
+        cout << "Не удалось создать файл администратора." << endl;
+        return;
+    }
+    string login, password;
+    cout << "Введите логин администратора: ";
+    cin >> login;
+    cout << "Введите пароль администратора: ";
+    cin >> password;
+    adminFile << login << ":" << password << endl;
+    cout << "Администратор успешно зарегистрирован." << endl;
+}
+
+
+void adminMode() {
+    system("cls");
+    ifstream adminFile("admin.txt");
+    if (!adminFile.is_open()) {
+        cout << "Не удалось открыть файл администратора." << endl;
+        createAdmin();
+        return;
+    }
+    string login, password;
+    cout << "Введите логин администратора: ";
+    cin >> login;
+    cout << "Введите пароль администратора: ";
+    cin >> password;
+    string line;
+    while (getline(adminFile, line)) {
+        vector<string> tokens = splitString(line, ':');
+        if (tokens.size() != 2) {
+            continue;
+        }
+        string adminLogin = trimString(tokens[0]);
+        string adminPassword = trimString(tokens[1]);
+        if (adminLogin == login && adminPassword == password) {
+            cout << "Авторизация прошла успешно!" << endl << endl;
+            bool exit = false;
+            while (!exit) {
+                cout << "Выберите действие:" << endl;
+                cout << "1. Просмотреть список пользователей" << endl;
+                cout << "2. Добавить товар" << endl;
+                cout << "3. Удалить товар" << endl;
+                cout << "4. Удалить пользователя" << endl;
+                cout << "5. Выход" << endl;
+                int choice;
+                cin >> choice;
+                switch (choice) {
+                case 1:
+                    viewUsers();
+                    break;
+                case 2:
+                    addProduct();
+                    break;
+                case 3:
+                    removeProduct();
+                    break;
+                case 4:
+                    deleteUser();
+                    break;
+                case 5:
+                    exit = true;
+                    break;
+                default:
+                    cout << "Неправильный выбор, попробуйте еще раз." << endl;
+                    break;
+                }
+            }
+            return;
+        }
+    }
+    cout << "Ошибка: Неправильный логин или пароль. Попробуйте еще раз." << endl;
+}
+
+bool checkAdminCredentials(string password) {
+    // считываем данные о администраторе из файла
+    ifstream adminFile("admin.txt");
+    if (!adminFile) {
+        cout << "Не удалось открыть файл администратора." << endl;
+        return false;
+    }
+    string line;
+    getline(adminFile, line);
+    string adminPassword = trimString(line);
+    return adminPassword == password;
+}
+
+void viewUsers() {
+    system("cls");
+    // считываем данные о пользователях из файла
+    ifstream usersFile("users.txt");
+    if (!usersFile) {
+        cout << "Не удалось открыть файл пользователей." << endl;
+        return;
+    }
+    string line;
+    while (getline(usersFile, line)) {
+        // выводим информацию о пользователе
+        vector<string> tokens = splitString(line, ':');
+        if (tokens.size() != 4) {
+            // строка должна содержать логин, пароль, имя и телефон, разделенные двоеточием
+            continue;
+        }
+        string login = trimString(tokens[0]);
+        string name = trimString(tokens[2]);
+        string phone = trimString(tokens[3]);
+        cout << "Логин: " << login << ", Имя: " << name << ", Телефон: " << phone << endl;
+    }
+}
+
+void addProduct() {
+    system("cls");
+    string productName;
+    double productPrice;
+    int productQuantity;
+
+    cout << "Введите название продукта: ";
+    cin >> productName;
+
+    cout << "Введите цену продукта: ";
+    cin >> productPrice;
+
+    cout << "Введите количество продукта: ";
+    cin >> productQuantity;
+
+    // открываем файл для добавления новой записи
+    ofstream productsFile("products.txt", ios::app);
+
+    if (!productsFile) {
+        cout << "Не удалось открыть файл продуктов для добавления новой записи." << endl;
+        return;
+    }
+
+    // записываем новую запись в файл
+    productsFile << productName << ":" << productPrice << ":" << productQuantity << endl;
+
+    cout << "Продукт успешно добавлен." << endl;
+}
+
+void removeProduct() {
+    system("cls");
+    string productName;
+    bool productFound = false;
+
+    cout << "Введите название продукта, который нужно удалить: ";
+    cin >> productName;
+
+    // открываем файл для чтения данных
+    ifstream productsFile("products.txt");
+
+    if (!productsFile) {
+        cout << "Не удалось открыть файл продуктов для удаления записи." << endl;
+        return;
+    }
+
+    // открываем временный файл для записи данных без удаленного продукта
+    ofstream tempFile("temp.txt");
+
+    if (!tempFile) {
+        cout << "Не удалось создать временный файл для удаления записи." << endl;
+        return;
+    }
+
+    string line;
+    while (getline(productsFile, line)) {
+        vector<string> tokens = splitString(line, ':');
+        if (tokens.size() != 3) {
+            continue;
+        }
+        string currentProductName = trimString(tokens[0]);
+        if (currentProductName == productName) {
+            productFound = true;
+            continue;
+        }
+        tempFile << line << endl;
+    }
+
+    // закрываем файлы
+    productsFile.close();
+    tempFile.close();
+
+    // удаляем старый файл и переименовываем временный файл
+    if (remove("products.txt") != 0) {
+        cout << "Не удалось удалить файл продуктов." << endl;
+        return;
+    }
+    if (rename("temp.txt", "products.txt") != 0) {
+        cout << "Не удалось переименовать временный файл продуктов." << endl;
+        return;
+    }
+
+    if (productFound) {
+        cout << "Продукт успешно удален." << endl;
+    }
+    else {
+        cout << "Продукт не найден." << endl;
+    }
+}
+
+void deleteUser() {
+    system("cls");
+    string login;
+    cout << "Введите логин пользователя, которого хотите удалить: ";
+    cin >> login;
+    // считываем данные о пользователях из файла
+    ifstream usersFile("users.txt");
+    if (!usersFile) {
+        cout << "Не удалось открыть файл пользователей." << endl;
+        return;
+    }
+    // записываем данные о пользователе в новый файл, пропуская данные удаляемого пользователя
+    ofstream newUsersFile("new_users.txt");
+    if (!newUsersFile) {
+        cout << "Не удалось создать новый файл пользователей." << endl;
+        return;
+    }
+    string line;
+    bool userFound = false;
+    while (getline(usersFile, line)) {
+        vector<string> tokens = splitString(line, ':');
+        if (tokens.size() != 4) {
+            continue;
+        }
+        string userLogin = trimString(tokens[0]);
+        if (userLogin == login) {
+            // найден пользователь, которого нужно удалить
+            userFound = true;
+            continue;
+        }
+        newUsersFile << line << endl;
+    }
+    if (!userFound) {
+        cout << "Пользователь с логином " << login << " не найден." << endl;
+    }
+    usersFile.close();
+    newUsersFile.close();
+    // удаляем старый файл пользователей
+    remove("users.txt");
+    // переименовываем новый файл в старое имя
+    if (rename("new_users.txt", "users.txt") != 0) {
+        cout << "Ошибка при переименовании файла пользователей." << endl;
+        return;
+    }
+    cout << "Пользователь " << login << " удален." << endl;
+}
+
+// функции для работы с каталогом товаров
+
+void viewCatalog(const vector<Product>& catalog) {
+    // считываем данные о продуктах из файла
+    ifstream productsFile("products.txt");
+    if (!productsFile) {
+        cout << "Не удалось открыть файл продуктов." << endl;
+        return;
+    }
+    string line;
+    while (getline(productsFile, line)) {
+        // выводим информацию о продукте
+        vector<string> tokens = splitString(line, ':');
+        if (tokens.size() != 3) {
+            // строка должна содержать название продукта, описание и цену, разделенные двоеточием
+            continue;
+        }
+        string name = trimString(tokens[0]);
+        string description = trimString(tokens[1]);
+        string price = trimString(tokens[2]);
+        cout << "Название: " << name << ", Описание: " << description << ", Цена: " << price << endl;
+    }
+}
+
+void sortCatalog() {
+    // считываем данные о продуктах из файла
+    ifstream productsFile("products.txt");
+    if (!productsFile) {
+        cout << "Не удалось открыть файл продуктов." << endl;
+        return;
+    }
+    // считываем все данные в вектор
+    vector<string> products;
+    string line;
+    while (getline(productsFile, line)) {
+        products.push_back(line);
+    }
+    // сортируем вектор по названию продукта в алфавитном порядке
+    sort(products.begin(), products.end());
+    // выводим отсортированные данные
+    for (string product : products) {
+        vector<string> tokens = splitString(product, ':');
+        if (tokens.size() != 3) {
+            continue;
+        }
+        string name = trimString(tokens[0]);
+        string description = trimString(tokens[1]);
+        string price = trimString(tokens[2]);
+        cout << "Название: " << name << ", Описание: " << description << ", Цена: " << price << endl;
+    }
+}
+
+void searchProduct() {
+    string searchQuery;
+    cout << "Введите название продукта для поиска: ";
+    cin >> searchQuery;
+    // считываем данные о продуктах из файла
+    ifstream productsFile("products.txt");
+    if (!productsFile) {
+        cout << "Не удалось открыть файл продуктов." << endl;
+        return;
+    }
+    string line;
+    bool productFound = false;
+    while (getline(productsFile, line)) {
+        vector<string> tokens = splitString(line, ':');
+        if (tokens.size() != 3) {
+            continue;
+        }
+        string name = trimString(tokens[0]);
+        string description = trimString(tokens[1]);
+        string price = trimString(tokens[2]);
+        if (name.find(searchQuery) != string::npos) {
+            // найден продукт, удовлетворяющий поисковому запросу
+            cout << "Название: " << name << ", Описание: " << description << ", Цена: " << price << endl;
+            productFound = true;
+        }
+    }
+    if (!productFound) {
+        cout << "Продукт с названием "" << searchQuery << "" не найден." << endl;
+    }
+}
+
+// функции для покупки товаров
+
+void buyProducts(string username, vector<Product>& catalog, vector<User>& users) {
+    int choice;
+    bool exit = false;
+    while (!exit) {
+        cout << "Выберите товар для покупки:" << endl;
+        for (int i = 0; i < catalog.size(); i++) {
+            cout << i + 1 << ". " << catalog[i].getName() << " (" << catalog[i].getPrice() << " рублей)" << endl;
+        }
+        cout << catalog.size() + 1 << ". Вернуться в главное меню" << endl;
+        cin >> choice;
+        if (choice < 1 || choice > catalog.size() + 1) {
+            cout << "Неверный выбор. Попробуйте еще раз." << endl;
+        }
+        else if (choice == catalog.size() + 1) {
+            exit = true;
+        }
+        else {
+            int quantity;
+            cout << "Введите количество товара:" << endl;
+            cin >> quantity;
+            if (quantity <= 0) {
+                cout << "Неверное количество товара. Попробуйте еще раз." << endl;
+            }
+            else {
+                int productIndex = choice - 1;
+                int totalCost = catalog[productIndex].getPrice() * quantity;
+                bool userFound = false;
+                for (int i = 0; i < users.size(); i++) {
+                    if (users[i].getUsername() == username) {
+                        userFound = true;
+                        if (catalog[productIndex].getQuantity() >= quantity) {
+                            catalog[productIndex].subtractQuantity(quantity);
+                            cout << "Товары успешно куплены. Списано " << totalCost << " рублей." << endl;
+                            cout << "Доступное количество товара \"" << catalog[productIndex].getName() << "\": " << catalog[productIndex].getQuantity() << endl;
+                        }
+                        else {
+                            cout << "Недостаточно товара на складе." << endl;
+                        }
+                        break;
+                    }
+                }
+                if (!userFound) {
+                    cout << "Пользователь с именем \"" << username << "\" не найден." << endl;
+                }
+            }
+        }
+    }
+}
+
+void buyProducts(const string& username, vector<Product>& catalog, vector<User>& users)
+{
+    int choice;
+    bool exit = false;
+    while (!exit) {
+        cout << "Выберите товар для покупки:" << endl;
+        for (int i = 0; i < catalog.size(); i++) {
+            cout << i + 1 << ". " << catalog[i].getName() << " (" << catalog[i].getPrice() << " рублей)" << endl;
+        }
+        cout << catalog.size() + 1 << ". Вернуться в главное меню" << endl;
+        cin >> choice;
+        if (choice < 1 || choice > catalog.size() + 1) {
+            cout << "Неверный выбор. Попробуйте еще раз." << endl;
+        }
+        else if (choice == catalog.size() + 1) {
+            exit = true;
+        }
+        else {
+            int quantity;
+            cout << "Введите количество товара:" << endl;
+            cin >> quantity;
+            if (quantity <= 0) {
+                cout << "Неверное количество товара. Попробуйте еще раз." << endl;
+            }
+            else {
+                int productIndex = choice - 1;
+                int totalCost = catalog[productIndex].getPrice() * quantity;
+                bool userFound = false;
+                for (int i = 0; i < users.size(); i++) {
+                    if (users[i].getUsername() == username) {
+                        userFound = true;
+                        if (catalog[productIndex].getQuantity() >= quantity) {
+                            catalog[productIndex].subtractQuantity(quantity);
+                            cout << "Товары успешно куплены. Списано " << totalCost << " рублей." << endl;
+                            cout << "Доступное количество товара \"" << catalog[productIndex].getName() << "\": " << catalog[productIndex].getQuantity() << endl;
+                        }
+                        else {
+                            cout << "Недостаточно товара на складе." << endl;
+                        }
+                        break;
+                    }
+                }
+                if (!userFound) {
+                    cout << "Пользователь с именем \"" << username << "\" не найден." << endl;
+                }
+            }
+        }
+    }
+}
+
+void showCatalog() {
+    // считываем данные о продуктах из файла
+    ifstream productsFile("products.txt");
+    if (!productsFile) {
+        cout << "Не удалось открыть файл продуктов." << endl;
+        return;
+    }
+    string line;
+    while (getline(productsFile, line)) {
+        // выводим информацию о продукте
+        vector<string> tokens = splitString(line, ':');
+        if (tokens.size() != 2) {
+            // строка должна содержать название и цену продукта, разделенные двоеточием
+            continue;
+        }
+        string name = trimString(tokens[0]);
+        string price = trimString(tokens[1]);
+        cout << "Продукт: " << name << ", Цена: " << price << " руб." << endl;
+    }
+}
+
+void removeProducts() {
+    // очищаем содержимое файла продуктов
+    ofstream productsFile("products.txt");
+    if (!productsFile) {
+        cout << "Не удалось открыть файл продуктов." << endl;
+        return;
+    }
+    productsFile << "";
+}
+
+void saveOrderToFile(string username, vector<string> products) {
+    // открываем файл заказов для пользователя
+    string filename = username + ".txt";
+    ofstream orderFile(filename);
+    if (!orderFile) {
+        cout << "Не удалось создать файл заказа." << endl;
+        return;
+    }
+    // записываем названия продуктов в файл
+    for (int i = 0; i < products.size(); i++) {
+        orderFile << products[i] << endl;
+    }
+}
+
+
+void showProfile(const string& username) {
+    // открываем файл с информацией о пользователях для чтения
+    ifstream file("users.txt");
+    if (!file.is_open()) {
+        cout << "Ошибка открытия файла." << endl;
+        return;
+    }
+
+    // ищем информацию о пользователе по имени пользователя
+    string line;
+    bool found = false;
+    while (getline(file, line)) {
+        vector<string> tokens = split(line, ';'); // разбиваем строку на отдельные поля
+        if (tokens[0] == username) { // если нашли информацию о нужном пользователе
+            cout << "Имя пользователя: " << tokens[0] << endl;
+            cout << "Пароль: " << tokens[1] << endl;
+            cout << "Фамилия: " << tokens[2] << endl;
+            cout << "Имя: " << tokens[3] << endl;
+            cout << "E-mail: " << tokens[4] << endl;
+            found = true;
+            break;
+        }
+    }
+    file.close();
+
+    if (!found) { // если пользователь не найден
+        cout << "Пользователь с именем " << username << " не найден." << endl;
+    }
+}
+
+int main() {
+    vector<Product> catalog;
+    vector<User> users;
+    system("cls");
+    setlocale(LC_ALL, "Russian");
+
+    bool isAdmin = false;
+    bool isLogged = false;
+    string currentUsername;
+    int choice;
+    bool exitFlag = false; // Исправлено: заменил exit на exitFlag
+    while (!exitFlag) {
+        if (!isLogged) {
+            cout << "1. Зарегистрировать нового пользователя" << endl;
+            cout << "2. Авторизация пользователя" << endl;
+            cout << "3. Режим администратора" << endl;
+            cout << "4. Каталог товаров" << endl;
+            cout << "5. Выход" << endl;
+            cin >> choice;
+
+            switch (choice) {
+            case 1:
+                registerUser();
+                break;
+            case 2:
+                isLogged = true;
+                loginUser();
+                if (!currentUsername.empty()) {
+                    isLogged = true;
+                }
+                break;
+            case 3:
+                isAdmin = true;
+                adminMode();
+                break;
+            case 4:
+                viewCatalog(catalog);
+                break;
+            case 5:
+                exitFlag = true;
+                break;
+            default:
+                cout << "Неверный выбор. Попробуйте еще раз." << endl;
+                break;
+            }
+        }
+        else {
+            cout << "1. Мой профиль" << endl;
+            cout << "2. Просмотреть каталог товаров" << endl;
+            cout << "3. Купить товары" << endl;
+            cout << "4. Выход из аккаунта" << endl;
+            cin >> choice;
+
+            switch (choice) {
+            case 1:
+                showProfile(currentUsername);
+                break;
+            case 2:
+                viewCatalog(catalog);
+                break;
+            case 3:
+                buyProducts(currentUsername, catalog, users);
+                break;
+            case 4:
+                isLogged = false;
+                break;
+            default:
+                cout << "Неверный выбор. Попробуйте еще раз." << endl;
+                break;
+            }
+        }
+    }
+
+    return 0; // Исправлено: добавлено возвращаемое значение
+}
+
+
